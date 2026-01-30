@@ -2,12 +2,26 @@ import wx
 import os
 import threading
 import json
+import winsound
 from core.decoder import AudibleDecoder
-from core.i18n import LANG # <--- L'import magique
+from core.i18n import LANG
 
+# --- GESTION DU GLISSER-DÉPOSER ---
+class FileDropTarget(wx.FileDropTarget):
+    def __init__(self, window):
+        super().__init__()
+        self.window = window
+
+    def OnDropFiles(self, x, y, filenames):
+        valid_files = [f for f in filenames if f.lower().endswith('.aax')]
+        if valid_files:
+            self.window.add_files_to_list(valid_files)
+        return True
+
+# --- DIALOGUE PRÉFÉRENCES ---
 class SettingsDialog(wx.Dialog):
     def __init__(self, parent, current_settings):
-        super().__init__(parent, title=LANG.get('btn_prefs'), size=(520, 500))
+        super().__init__(parent, title=LANG.get('menu_prefs'), size=(520, 500))
         self.settings = current_settings
         self.notebook = wx.Notebook(self)
 
@@ -52,20 +66,13 @@ class SettingsDialog(wx.Dialog):
         sizer.Add(box_dest, 0, wx.EXPAND | wx.ALL, 10)
 
         box_struct = wx.StaticBoxSizer(wx.VERTICAL, self.tab_general, LANG.get('box_struct'))
-        self.choice_struct = wx.Choice(self.tab_general, choices=[
-            LANG.get('struct_none'), 
-            LANG.get('struct_auth'), 
-            LANG.get('struct_auth_title')
-        ])
+        self.choice_struct = wx.Choice(self.tab_general, choices=[LANG.get('struct_none'), LANG.get('struct_auth'), LANG.get('struct_auth_title')])
         self.choice_struct.SetSelection(self.settings.get('struct_index', 2))
         box_struct.Add(self.choice_struct, 0, wx.EXPAND | wx.ALL, 10)
         sizer.Add(box_struct, 0, wx.EXPAND | wx.ALL, 10)
 
         box_name = wx.StaticBoxSizer(wx.VERTICAL, self.tab_general, LANG.get('box_name'))
-        self.choice_naming = wx.Choice(self.tab_general, choices=[
-            LANG.get('name_original'), 
-            LANG.get('name_title')
-        ])
+        self.choice_naming = wx.Choice(self.tab_general, choices=[LANG.get('name_original'), LANG.get('name_title')])
         self.choice_naming.SetSelection(self.settings.get('naming_index', 1))
         box_name.Add(self.choice_naming, 0, wx.EXPAND | wx.ALL, 10)
         sizer.Add(box_name, 0, wx.EXPAND | wx.ALL, 10)
@@ -80,6 +87,7 @@ class SettingsDialog(wx.Dialog):
         self.chk_split.Bind(wx.EVT_CHECKBOX, self.on_split_change)
         self.chk_chap_num = wx.CheckBox(self.tab_mp3, label=LANG.get('chk_num'))
         self.chk_chap_num.SetValue(self.settings.get('chapter_prefix', False))
+        
         box_chap.Add(self.chk_split, 0, wx.ALL, 5)
         box_chap.Add(self.chk_chap_num, 0, wx.ALL, 5)
         sizer.Add(box_chap, 0, wx.EXPAND | wx.ALL, 10)
@@ -91,7 +99,6 @@ class SettingsDialog(wx.Dialog):
         else: self.radio_mode.SetSelection(0)
         self.radio_mode.Bind(wx.EVT_RADIOBOX, self.on_mp3_mode_change)
         box_qual.Add(self.radio_mode, 0, wx.EXPAND | wx.ALL, 10)
-        
         self.choice_quality = wx.Choice(self.tab_mp3)
         box_qual.Add(self.choice_quality, 0, wx.EXPAND | wx.ALL, 10)
         sizer.Add(box_qual, 0, wx.EXPAND | wx.ALL, 10)
@@ -142,98 +149,266 @@ class SettingsDialog(wx.Dialog):
             'mp3_value': self.current_data[q_idx][1]
         }
 
+# --- FENÊTRE PRINCIPALE ---
 class MainFrame(wx.Frame):
     def __init__(self):
-        super().__init__(parent=None, title=LANG.get('app_title'), size=(650, 650))
+        super().__init__(parent=None, title=LANG.get('app_title'), size=(800, 600))
         self.config_file = os.path.join(os.getcwd(), "settings.json")
+        self.decoder = AudibleDecoder()
+        self.app_settings = self.load_settings()
+        
+        self.file_list = []
+        self.processed_paths = {} 
+        self.is_converting = False
+        self.stop_requested = False
+
+        self.create_menu_bar()
+
         self.panel = wx.Panel(self)
         self.main_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.decoder = AudibleDecoder()
-        tools_ok, tools_msg = self.decoder.check_tools()
-        self.app_settings = self.load_settings()
-        self.current_metadata = None
-        self.is_closing = False     
-        self.is_converting = False  
 
-        self.Bind(wx.EVT_CLOSE, self.on_close)
+        self.list_ctrl = wx.ListCtrl(self.panel, style=wx.LC_REPORT | wx.BORDER_SUNKEN)
+        self.list_ctrl.InsertColumn(0, LANG.get('col_file'), width=450)
+        self.list_ctrl.InsertColumn(1, LANG.get('col_status'), width=150)
+        
+        self.drop_target = FileDropTarget(self)
+        self.list_ctrl.SetDropTarget(self.drop_target)
+        
+        # --- MODIF CLAVIER : On utilise EVT_CONTEXT_MENU au lieu de EVT_LIST_ITEM_RIGHT_CLICK
+        # Cela capture le clic droit ET la touche Application du clavier
+        self.list_ctrl.Bind(wx.EVT_CONTEXT_MENU, self.on_context_menu)
 
-        self.lbl_status = wx.TextCtrl(self.panel, value=LANG.get('status_sys', tools_msg), style=wx.TE_READONLY|wx.BORDER_NONE)
-        self.lbl_status.SetForegroundColour(wx.BLUE if tools_ok else wx.RED)
-        self.main_sizer.Add(self.lbl_status, 0, wx.EXPAND | wx.ALL, 10)
-        self.main_sizer.Add(wx.StaticLine(self.panel), 0, wx.EXPAND | wx.ALL, 5)
+        self.main_sizer.Add(self.list_ctrl, 1, wx.EXPAND | wx.ALL, 10)
 
-        self.main_sizer.Add(wx.StaticText(self.panel, label=LANG.get('lbl_file')), 0, wx.LEFT, 15)
-        file_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.txt_file = wx.TextCtrl(self.panel)
-        file_sizer.Add(self.txt_file, 1, wx.EXPAND | wx.RIGHT, 10)
-        self.btn_browse = wx.Button(self.panel, label=LANG.get('btn_browse'))
-        self.btn_browse.Bind(wx.EVT_BUTTON, self.on_browse)
-        file_sizer.Add(self.btn_browse, 0)
-        self.main_sizer.Add(file_sizer, 0, wx.EXPAND | wx.ALL, 15)
-
-        self.info_box = wx.StaticBoxSizer(wx.VERTICAL, self.panel, LANG.get('box_info'))
-        self.lbl_title = wx.StaticText(self.panel, label=LANG.get('lbl_title') + " -")
-        self.lbl_author = wx.StaticText(self.panel, label=LANG.get('lbl_author') + " -")
-        font = self.lbl_title.GetFont()
-        font.SetWeight(wx.FONTWEIGHT_BOLD)
-        self.lbl_title.SetFont(font)
-        self.info_box.Add(self.lbl_title, 0, wx.ALL, 5)
-        self.info_box.Add(self.lbl_author, 0, wx.ALL, 5)
-        self.main_sizer.Add(self.info_box, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 15)
-
-        self.main_sizer.Add(wx.StaticText(self.panel, label=LANG.get('lbl_format')), 0, wx.LEFT | wx.TOP, 15)
-        opts_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        opt_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        opt_sizer.Add(wx.StaticText(self.panel, label=LANG.get('lbl_format')), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        
         self.choice_fmt = wx.Choice(self.panel, choices=[])
         self.choice_fmt.Bind(wx.EVT_CHOICE, self.on_format_change)
         self.update_format_choices()
         self.choice_fmt.SetSelection(self.app_settings.get('format_index', 0))
-        opts_sizer.Add(self.choice_fmt, 1, wx.EXPAND | wx.RIGHT, 10)
-        self.btn_prefs = wx.Button(self.panel, label=LANG.get('btn_prefs'))
-        self.btn_prefs.Bind(wx.EVT_BUTTON, self.on_prefs)
-        opts_sizer.Add(self.btn_prefs, 0)
-        self.main_sizer.Add(opts_sizer, 0, wx.EXPAND | wx.ALL, 15)
+        
+        opt_sizer.Add(self.choice_fmt, 0, wx.RIGHT, 20)
+        self.main_sizer.Add(opt_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
         self.gauge = wx.Gauge(self.panel, range=100)
-        self.main_sizer.Add(self.gauge, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 15)
-        self.txt_log = wx.TextCtrl(self.panel, style=wx.TE_MULTILINE|wx.TE_READONLY)
-        self.main_sizer.Add(self.txt_log, 1, wx.EXPAND | wx.ALL, 15)
+        self.main_sizer.Add(self.gauge, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+        
+        self.txt_log = wx.TextCtrl(self.panel, style=wx.TE_MULTILINE|wx.TE_READONLY, size=(-1, 100))
+        self.main_sizer.Add(self.txt_log, 0, wx.EXPAND | wx.ALL, 10)
 
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.btn_start = wx.Button(self.panel, label=LANG.get('btn_start'))
-        self.btn_start.Enable(False)
-        self.btn_start.Bind(wx.EVT_BUTTON, self.on_start)
+        self.btn_start.Bind(wx.EVT_BUTTON, self.on_start_batch)
+        self.btn_start.Disable() 
+        
+        self.btn_stop = wx.Button(self.panel, label=LANG.get('btn_stop'))
+        self.btn_stop.Bind(wx.EVT_BUTTON, self.on_stop_batch)
+        self.btn_stop.Disable()
+
         btn_sizer.Add(self.btn_start, 0, wx.RIGHT, 10)
-        btn_quit = wx.Button(self.panel, label=LANG.get('btn_quit'))
-        btn_quit.Bind(wx.EVT_BUTTON, self.on_quit)
-        btn_sizer.Add(btn_quit, 0)
-        self.main_sizer.Add(btn_sizer, 0, wx.ALIGN_RIGHT | wx.ALL, 15)
+        btn_sizer.Add(self.btn_stop, 0)
+        self.main_sizer.Add(btn_sizer, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
 
         self.panel.SetSizer(self.main_sizer)
         self.Centre()
+        
+        tools_ok, tools_msg = self.decoder.check_tools()
+        self.log(LANG.get('status_sys', tools_msg))
         if not tools_ok:
-            self.btn_browse.Disable()
-            self.choice_fmt.Disable()
-            self.btn_prefs.Disable()
+            self.Enable(False)
+            wx.MessageBox(tools_msg, "Erreur", wx.ICON_ERROR)
+
+        self.Bind(wx.EVT_CLOSE, self.on_close)
+
+    def create_menu_bar(self):
+        menubar = wx.MenuBar()
+        file_menu = wx.Menu()
+        item_add = file_menu.Append(wx.ID_ANY, LANG.get('menu_add') + "\tCtrl+O")
+        item_clear = file_menu.Append(wx.ID_ANY, LANG.get('menu_clear'))
+        file_menu.AppendSeparator()
+        item_quit = file_menu.Append(wx.ID_EXIT, LANG.get('menu_quit') + "\tAlt+F4")
+        self.Bind(wx.EVT_MENU, self.on_add_files_menu, item_add)
+        self.Bind(wx.EVT_MENU, self.on_clear_list, item_clear)
+        self.Bind(wx.EVT_MENU, self.on_quit, item_quit)
+        menubar.Append(file_menu, LANG.get('menu_file'))
+
+        edit_menu = wx.Menu()
+        item_prefs = edit_menu.Append(wx.ID_PREFERENCES, LANG.get('menu_prefs'))
+        self.Bind(wx.EVT_MENU, self.on_prefs, item_prefs)
+        menubar.Append(edit_menu, LANG.get('menu_edit'))
+
+        help_menu = wx.Menu()
+        item_about = help_menu.Append(wx.ID_ABOUT, LANG.get('menu_about'))
+        self.Bind(wx.EVT_MENU, self.on_about, item_about)
+        menubar.Append(help_menu, LANG.get('menu_help'))
+        self.SetMenuBar(menubar)
+
+    # --- MODIF CLAVIER : Gestionnaire unifié Clavier + Souris ---
+    def on_context_menu(self, event):
+        # On utilise GetFirstSelected qui marche même sans la souris
+        idx = self.list_ctrl.GetFirstSelected()
+        
+        if idx != -1:
+            # On crée le menu
+            menu = wx.Menu()
+            item_open = menu.Append(wx.ID_ANY, LANG.get('ctx_open_folder'))
+            self.Bind(wx.EVT_MENU, self.on_open_folder, item_open)
+            
+            # PopupMenu s'ouvre à la position de la souris OU du curseur texte si clavier
+            self.PopupMenu(menu)
+            menu.Destroy()
+    # -----------------------------------------------------------
+
+    def on_open_folder(self, event):
+        idx = self.list_ctrl.GetFirstSelected()
+        if idx != -1 and idx in self.processed_paths:
+            path = self.processed_paths[idx]
+            if os.path.exists(path):
+                os.startfile(path)
+            else:
+                wx.MessageBox("Le dossier n'existe pas encore (ou a été déplacé).", "Erreur")
+        else:
+            wx.MessageBox("Convertissez d'abord ce fichier pour voir le dossier.", "Info")
+
+    def add_files_to_list(self, files):
+        for f in files:
+            if f not in self.file_list:
+                self.file_list.append(f)
+                index = self.list_ctrl.InsertItem(self.list_ctrl.GetItemCount(), os.path.basename(f))
+                self.list_ctrl.SetItem(index, 1, LANG.get('status_waiting'))
+        
+        if self.file_list:
+            self.btn_start.Enable(True)
+
+    def on_add_files_menu(self, event):
+        with wx.FileDialog(self, LANG.get('menu_add'), wildcard="AAX|*.aax", style=wx.FD_OPEN|wx.FD_FILE_MUST_EXIST|wx.FD_MULTIPLE) as dlg:
+            if dlg.ShowModal() != wx.ID_CANCEL:
+                self.add_files_to_list(dlg.GetPaths())
+
+    def on_clear_list(self, event):
+        if not self.is_converting:
+            self.list_ctrl.DeleteAllItems()
+            self.file_list = []
+            self.processed_paths = {}
+            self.btn_start.Disable()
+
+    def on_start_batch(self, event):
+        self.save_settings()
+        self.is_converting = True
+        self.stop_requested = False
+        self.btn_start.Disable()
+        self.btn_stop.Enable(True)
+        
+        mb = self.GetMenuBar()
+        for i in range(mb.GetMenuCount()):
+            mb.EnableTop(i, False)
+        
+        threading.Thread(target=self.run_batch_process).start()
+
+    def on_stop_batch(self, event):
+        self.stop_requested = True
+        self.decoder.cancel_operation()
+        self.log("Arrêt demandé...")
+
+    def run_batch_process(self):
+        success_count = 0
+        
+        for i, aax_file in enumerate(self.file_list):
+            if self.stop_requested: break
+            
+            wx.CallAfter(self.list_ctrl.SetItem, i, 1, LANG.get('status_processing'))
+            self.log(f"Traitement de : {os.path.basename(aax_file)}")
+
+            try:
+                meta = self.decoder.get_metadata(aax_file)
+                fmt_idx = self.choice_fmt.GetSelection()
+                fmt = "mp3" if fmt_idx == 0 else ("m4b" if fmt_idx == 1 else "m4a")
+                
+                if self.app_settings['output_mode'] == 'custom' and self.app_settings['custom_path']:
+                    base_dir = self.app_settings['custom_path']
+                else: base_dir = os.path.dirname(aax_file)
+
+                struct_idx = self.app_settings['struct_index']
+                auth = self.decoder.sanitize_filename(meta.get('artist', 'Unknown'))
+                tit = self.decoder.sanitize_filename(meta.get('title', 'Unknown'))
+                
+                final_folder = base_dir
+                if struct_idx == 1: final_folder = os.path.join(base_dir, auth)
+                elif struct_idx == 2: final_folder = os.path.join(base_dir, auth, tit)
+                
+                naming_idx = self.app_settings['naming_index']
+                if naming_idx == 1: final_name = tit + f".{fmt}"
+                else: final_name = os.path.splitext(os.path.basename(aax_file))[0] + f".{fmt}"
+                    
+                do_split = (fmt == "mp3" and self.app_settings['split'])
+                chap_prefix = self.app_settings.get('chapter_prefix', False)
+                
+                if do_split:
+                    if struct_idx == 2:
+                        target_path = final_folder
+                    else:
+                        folder_name_chap = os.path.splitext(final_name)[0]
+                        target_path = os.path.join(final_folder, folder_name_chap)
+                else:
+                    target_path = os.path.join(final_folder, final_name)
+
+                if do_split: self.processed_paths[i] = target_path
+                else: self.processed_paths[i] = os.path.dirname(target_path)
+
+                checksum = self.decoder.get_checksum(aax_file)
+                key = self.decoder.get_activation_bytes(checksum)
+                
+                self.decoder.convert_book(
+                    aax_file, key, target_path, 
+                    output_format=fmt,
+                    split_chapters=do_split,
+                    chapter_num_prefix=chap_prefix,
+                    bitrate_mode=self.app_settings['mp3_mode'],
+                    bitrate_value=self.app_settings['mp3_value'],
+                    progress_callback=self.update_progress
+                )
+                
+                wx.CallAfter(self.list_ctrl.SetItem, i, 1, LANG.get('status_done'))
+                success_count += 1
+                
+                try: winsound.MessageBeep(winsound.MB_OK)
+                except: pass
+                
+            except Exception as e:
+                wx.CallAfter(self.list_ctrl.SetItem, i, 1, LANG.get('status_error'))
+                self.log(f"Erreur sur {os.path.basename(aax_file)} : {e}")
+                if self.stop_requested: break
+        
+        self.is_converting = False
+        try: winsound.MessageBeep(winsound.MB_ICONASTERISK)
+        except: pass
+        
+        wx.CallAfter(self.finish_batch_ui, success_count)
+
+    def finish_batch_ui(self, count):
+        self.btn_start.Enable(True)
+        self.btn_stop.Disable()
+        
+        mb = self.GetMenuBar()
+        for i in range(mb.GetMenuCount()):
+            mb.EnableTop(i, True)
+            
+        self.gauge.SetValue(0)
+        self.log("---")
+        msg = LANG.get('batch_finished') + "\n" + LANG.get('batch_msg', count)
+        wx.MessageBox(msg, "Info", wx.OK | wx.ICON_INFORMATION)
+
+    def update_progress(self, pct):
+        if not self.stop_requested:
+            wx.CallAfter(self.gauge.SetValue, pct)
+
+    def log(self, msg): 
+        wx.CallAfter(self.txt_log.AppendText, msg + "\n")
 
     def on_format_change(self, event):
         self.save_settings()
         self.update_format_choices()
-
-    def on_quit(self, event): self.Close()
-
-    def on_close(self, event):
-        if self.is_converting:
-            dlg = wx.MessageDialog(self, LANG.get('confirm_quit_msg'), LANG.get('confirm_quit_title'), wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING)
-            result = dlg.ShowModal()
-            dlg.Destroy()
-            if result != wx.ID_YES:
-                event.Veto()
-                return
-
-        self.is_closing = True
-        self.decoder.cancel_operation() 
-        self.save_settings()
-        event.Skip() 
 
     def update_format_choices(self):
         curr = self.choice_fmt.GetSelection()
@@ -248,11 +423,11 @@ class MainFrame(wx.Frame):
         else: self.choice_fmt.SetSelection(0)
 
     def load_settings(self):
-        default = {
+        default = { 
             'format_index': 0, 'output_mode': 'same', 'custom_path': '', 
-            'struct_index': 2, 'naming_index': 1,
-            'split': False, 'chapter_prefix': False,
-            'mp3_mode': 'vbr', 'mp3_value': '2'
+            'struct_index': 2, 'naming_index': 1, 
+            'split': False, 'chapter_prefix': False, 
+            'mp3_mode': 'vbr', 'mp3_value': '2' 
         }
         if os.path.exists(self.config_file):
             try:
@@ -266,34 +441,6 @@ class MainFrame(wx.Frame):
             with open(self.config_file, 'w') as f: json.dump(self.app_settings, f)
         except: pass
 
-    def log(self, msg): 
-        if not self.is_closing:
-            wx.CallAfter(self.txt_log.AppendText, msg + "\n")
-
-    def update_progress(self, pct):
-        if not self.is_closing:
-            wx.CallAfter(self.gauge.SetValue, pct)
-
-    def on_browse(self, event):
-        with wx.FileDialog(self, LANG.get('lbl_file'), wildcard="AAX|*.aax", style=wx.FD_OPEN|wx.FD_FILE_MUST_EXIST) as dlg:
-            if dlg.ShowModal() != wx.ID_CANCEL:
-                path = dlg.GetPath()
-                self.txt_file.SetValue(path)
-                self.log(f"File: {os.path.basename(path)}")
-                self.log(LANG.get('reading_meta'))
-                def fetch_meta():
-                    meta = self.decoder.get_metadata(path)
-                    if not self.is_closing:
-                        wx.CallAfter(self.update_meta_display, meta)
-                threading.Thread(target=fetch_meta).start()
-
-    def update_meta_display(self, meta):
-        self.current_metadata = meta
-        self.lbl_title.SetLabel(f"{LANG.get('lbl_title')} {meta['title']}")
-        self.lbl_author.SetLabel(f"{LANG.get('lbl_author')} {meta['artist']}")
-        self.log(LANG.get('detected', meta['title'], meta['artist']))
-        self.btn_start.Enable(True)
-
     def on_prefs(self, event):
         dlg = SettingsDialog(self, self.app_settings)
         if dlg.ShowModal() == wx.ID_OK:
@@ -304,68 +451,19 @@ class MainFrame(wx.Frame):
             self.update_format_choices()
         dlg.Destroy()
 
-    def on_start(self, event):
+    def on_about(self, event):
+        wx.MessageBox("Décodeur Audible V2\n© 2024", LANG.get('menu_about'))
+
+    def on_quit(self, event): self.Close()
+
+    def on_close(self, event):
+        if self.is_converting:
+            dlg = wx.MessageDialog(self, LANG.get('confirm_quit_msg'), LANG.get('confirm_quit_title'), wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING)
+            if dlg.ShowModal() != wx.ID_YES:
+                event.Veto()
+                return
+            self.stop_requested = True
+            self.decoder.cancel_operation()
+            
         self.save_settings()
-        self.btn_start.Disable()
-        threading.Thread(target=self.run_process).start()
-
-    def run_process(self):
-        aax = self.txt_file.GetValue()
-        fmt_idx = self.choice_fmt.GetSelection()
-        fmt = "mp3" if fmt_idx == 0 else ("m4b" if fmt_idx == 1 else "m4a")
-        self.is_converting = True
-        
-        try:
-            self.log(LANG.get('start_msg'))
-            if self.app_settings['output_mode'] == 'custom' and self.app_settings['custom_path']:
-                base_dir = self.app_settings['custom_path']
-            else: base_dir = os.path.dirname(aax)
-
-            struct_idx = self.app_settings['struct_index']
-            auth = self.decoder.sanitize_filename(self.current_metadata.get('artist', 'Unknown'))
-            tit = self.decoder.sanitize_filename(self.current_metadata.get('title', 'Unknown'))
-            
-            final_folder = base_dir
-            if struct_idx == 1: final_folder = os.path.join(base_dir, auth)
-            elif struct_idx == 2: final_folder = os.path.join(base_dir, auth, tit)
-            
-            naming_idx = self.app_settings['naming_index']
-            if naming_idx == 1: final_name = tit + f".{fmt}"
-            else: final_name = os.path.splitext(os.path.basename(aax))[0] + f".{fmt}"
-                
-            do_split = (fmt == "mp3" and self.app_settings['split'])
-            chap_prefix = self.app_settings.get('chapter_prefix', False)
-            
-            if do_split:
-                folder_name_chap = os.path.splitext(final_name)[0]
-                target_path = os.path.join(final_folder, folder_name_chap)
-            else: target_path = os.path.join(final_folder, final_name)
-
-            self.log(f"Dest: {target_path}")
-
-            checksum = self.decoder.get_checksum(aax)
-            key = self.decoder.get_activation_bytes(checksum)
-            
-            out = self.decoder.convert_book(
-                aax, key, target_path, 
-                output_format=fmt,
-                split_chapters=do_split,
-                chapter_num_prefix=chap_prefix,
-                bitrate_mode=self.app_settings['mp3_mode'],
-                bitrate_value=self.app_settings['mp3_value'],
-                progress_callback=self.update_progress
-            )
-            
-            self.update_progress(100)
-            self.log(LANG.get('success'))
-            if not self.is_closing:
-                wx.CallAfter(wx.MessageBox, LANG.get('saved_in', out), LANG.get('success'), wx.OK|wx.ICON_INFORMATION)
-
-        except Exception as e:
-            if not self.is_closing:
-                self.log(LANG.get('error', e))
-                wx.CallAfter(wx.MessageBox, str(e), "Status", wx.OK|wx.ICON_ERROR)
-        finally: 
-            self.is_converting = False
-            if not self.is_closing:
-                wx.CallAfter(self.btn_start.Enable, True)
+        event.Skip()

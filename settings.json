@@ -1,1 +1,1 @@
-{"format_index": 1, "output_mode": "custom", "custom_path": "", "struct_index": 2, "naming_index": 1, "split": true, "chapter_prefix": true, "mp3_mode": "cbr", "mp3_value": "320k"}
+{"format_index": 1, "output_mode": "same", "custom_path": "", "struct_index": 2, "naming_index": 1, "split": true, "chapter_prefix": true, "mp3_mode": "cbr", "mp3_value": "192k"}

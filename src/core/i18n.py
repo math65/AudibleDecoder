@@ -1,200 +1,72 @@
 import locale
 
-# Dictionnaire complet Français / Anglais
 TRANSLATIONS = {
+    # --- MENUS ---
+    'menu_file': { 'fr': "Fichier", 'en': "File" },
+    'menu_add': { 'fr': "Ajouter des fichiers...", 'en': "Add Files..." },
+    'menu_clear': { 'fr': "Vider la liste", 'en': "Clear List" },
+    'menu_quit': { 'fr': "Quitter", 'en': "Quit" },
+    'menu_edit': { 'fr': "Édition", 'en': "Edit" },
+    'menu_prefs': { 'fr': "Préférences...", 'en': "Preferences..." },
+    'menu_help': { 'fr': "Aide", 'en': "Help" },
+    'menu_about': { 'fr': "À propos", 'en': "About" },
+    'ctx_open_folder': { 'fr': "Ouvrir le dossier de destination", 'en': "Open Destination Folder" },
+
+    # --- LISTE DES FICHIERS ---
+    'col_file': { 'fr': "Fichier", 'en': "File" },
+    'col_status': { 'fr': "État", 'en': "Status" },
+    'status_waiting': { 'fr': "En attente", 'en': "Waiting" },
+    'status_processing': { 'fr': "En cours...", 'en': "Processing..." },
+    'status_done': { 'fr': "Terminé", 'en': "Done" },
+    'status_error': { 'fr': "Erreur", 'en': "Error" },
+
     # --- UI GÉNÉRAL ---
-    'app_title': {
-        'fr': "Décodeur Audible",
-        'en': "Audible Decoder"
-    },
-    'tab_general': {
-        'fr': "Général et Sortie",
-        'en': "General & Output"
-    },
-    'tab_mp3': {
-        'fr': "Encodage MP3",
-        'en': "MP3 Encoding"
-    },
-    'btn_start': {
-        'fr': "Démarrer",
-        'en': "Start"
-    },
-    'btn_quit': {
-        'fr': "Quitter",
-        'en': "Quit"
-    },
-    'btn_browse': {
-        'fr': "Parcourir...",
-        'en': "Browse..."
-    },
-    'btn_choose': {
-        'fr': "Choisir...",
-        'en': "Choose..."
-    },
-    'btn_prefs': {
-        'fr': "Préférences...",
-        'en': "Settings..."
-    },
-    'btn_ok': {
-        'fr': "OK",
-        'en': "OK"
-    },
-    'btn_cancel': {
-        'fr': "Annuler",
-        'en': "Cancel"
-    },
+    'app_title': { 'fr': "Décodeur Audible V2", 'en': "Audible Decoder V2" },
+    'tab_general': { 'fr': "Général et Sortie", 'en': "General & Output" },
+    'tab_mp3': { 'fr': "Encodage MP3", 'en': "MP3 Encoding" },
+    'btn_start': { 'fr': "Lancer la conversion", 'en': "Start Conversion" },
+    'btn_stop': { 'fr': "Arrêter", 'en': "Stop" },
+    'btn_ok': { 'fr': "OK", 'en': "OK" },
+    'btn_cancel': { 'fr': "Annuler", 'en': "Cancel" },
+    'btn_choose': { 'fr': "Choisir...", 'en': "Choose..." },
 
-    # --- SECTION FICHIER ---
-    'lbl_file': {
-        'fr': "Livre Audio (.aax) :",
-        'en': "Audiobook file (.aax):"
-    },
-    'box_info': {
-        'fr': "Informations détectées",
-        'en': "Detected Info"
-    },
-    'lbl_title': {
-        'fr': "Titre :",
-        'en': "Title:"
-    },
-    'lbl_author': {
-        'fr': "Auteur :",
-        'en': "Author:"
-    },
-    'detected': {
-        'fr': "-> Détecté : {} par {}",
-        'en': "-> Detected: {} by {}"
-    },
-    'reading_meta': {
-        'fr': "Lecture des infos...",
-        'en': "Reading metadata..."
-    },
+    # --- INFO & LOGS ---
+    'lbl_format': { 'fr': "Format de sortie :", 'en': "Output Format:" },
+    'status_sys': { 'fr': "Système : {}", 'en': "System: {}" },
+    'sys_ready': { 'fr': "Prêt", 'en': "Ready" },
+    'sys_missing': { 'fr': "Manquant : {}", 'en': "Missing: {}" },
+    'batch_finished': { 'fr': "Traitement terminé !", 'en': "Batch finished!" },
+    'batch_msg': { 'fr': "{} fichiers traités avec succès.", 'en': "{} files processed successfully." },
 
-    # --- SECTION FORMAT & LOGS ---
-    'lbl_format': {
-        'fr': "Format de sortie :",
-        'en': "Output Format:"
-    },
-    'status_sys': {
-        'fr': "Système : {}",
-        'en': "System: {}"
-    },
-    'sys_ready': {
-        'fr': "Système complet et prêt.",
-        'en': "System ready."
-    },
-    'sys_missing': {
-        'fr': "Manquant : {}",
-        'en': "Missing: {}"
-    },
+    # --- PRÉFÉRENCES ---
+    'box_dest': { 'fr': "Dossier de destination", 'en': "Destination Folder" },
+    'rad_same': { 'fr': "Même dossier que le fichier original", 'en': "Same folder as original file" },
+    'rad_custom': { 'fr': "Dossier spécifique :", 'en': "Custom folder:" },
+    'box_struct': { 'fr': "Organisation", 'en': "Organization" },
+    'struct_none': { 'fr': "Aucun (En vrac)", 'en': "None (Flat)" },
+    'struct_auth': { 'fr': "Dossier Auteur", 'en': "Author Folder" },
+    'struct_auth_title': { 'fr': "Auteur / Titre", 'en': "Author / Title" },
+    'box_name': { 'fr': "Nommage", 'en': "Naming" },
+    'name_original': { 'fr': "Nom original", 'en': "Original Name" },
+    'name_title': { 'fr': "Titre du livre", 'en': "Book Title" },
 
-    # --- ONGLET GÉNÉRAL ---
-    'box_dest': {
-        'fr': "Dossier de destination",
-        'en': "Destination Folder"
-    },
-    'rad_same': {
-        'fr': "Même dossier que le fichier original",
-        'en': "Same folder as original file"
-    },
-    'rad_custom': {
-        'fr': "Dossier spécifique :",
-        'en': "Custom folder:"
-    },
-    'box_struct': {
-        'fr': "Organisation des dossiers",
-        'en': "Folder Structure"
-    },
-    'struct_none': {
-        'fr': "Aucun sous-dossier (En vrac)",
-        'en': "No subfolder (Flat)"
-    },
-    'struct_auth': {
-        'fr': "Créer dossier : Auteur",
-        'en': "Create folder: Author"
-    },
-    'struct_auth_title': {
-        'fr': "Créer dossier : Auteur / Titre (Recommandé)",
-        'en': "Create folder: Author / Title (Recommended)"
-    },
-    'box_name': {
-        'fr': "Nom du fichier final",
-        'en': "Final Filename"
-    },
-    'name_original': {
-        'fr': "Garder le nom du fichier original",
-        'en': "Keep original filename"
-    },
-    'name_title': {
-        'fr': "Utiliser le Titre du livre",
-        'en': "Use Book Title"
-    },
-
-    # --- ONGLET MP3 ---
-    'box_split': {
-        'fr': "Découpage",
-        'en': "Splitting"
-    },
-    'chk_split': {
-        'fr': "Diviser le livre par chapitres",
-        'en': "Split book by chapters"
-    },
-    'chk_num': {
-        'fr': "Numéroter les fichiers (01 - Chapitre 1)",
-        'en': "Number files (01 - Chapter 1)"
-    },
-    'box_qual': {
-        'fr': "Qualité Audio",
-        'en': "Audio Quality"
-    },
-    'qual_vbr': {
-        'fr': "Débit Variable (VBR)",
-        'en': "Variable Bitrate (VBR)"
-    },
-    'qual_cbr': {
-        'fr': "Débit Constant (CBR)",
-        'en': "Constant Bitrate (CBR)"
-    },
+    # --- MP3 ---
+    'box_split': { 'fr': "Découpage", 'en': "Splitting" },
+    'chk_split': { 'fr': "Diviser par chapitres", 'en': "Split by chapters" },
+    'chk_num': { 'fr': "Numéroter (01 - ...)", 'en': "Numbering (01 - ...)" },
+    'box_qual': { 'fr': "Qualité", 'en': "Quality" },
+    'qual_vbr': { 'fr': "VBR (Variable)", 'en': "VBR (Variable)" },
+    'qual_cbr': { 'fr': "CBR (Constant)", 'en': "CBR (Constant)" },
     
-    # --- MESSAGES / ERREURS ---
-    'start_msg': {
-        'fr': "--- Démarrage ---",
-        'en': "--- Starting ---"
-    },
-    'success': {
-        'fr': "SUCCÈS !",
-        'en': "SUCCESS!"
-    },
-    'saved_in': {
-        'fr': "Sauvegardé dans :\n{}",
-        'en': "Saved in:\n{}"
-    },
-    'error': {
-        'fr': "ERREUR : {}",
-        'en': "ERROR: {}"
-    },
-    'confirm_quit_title': {
-        'fr': "Conversion en cours",
-        'en': "Conversion in progress"
-    },
-    'confirm_quit_msg': {
-        'fr': "Une conversion est en cours.\nSi vous quittez, elle sera annulée.\nVoulez-vous vraiment quitter ?",
-        'en': "Conversion is running.\nIf you quit now, it will be cancelled.\nAre you sure?"
-    },
-    'flux_copy': {
-        'fr': "Flux copié",
-        'en': "Stream copy"
-    },
-    'chapters': {
-        'fr': "Chapitres",
-        'en': "Chapters"
-    }
+    # --- CONFIRMATIONS ---
+    'confirm_quit_title': { 'fr': "Conversion en cours", 'en': "Conversion running" },
+    'confirm_quit_msg': { 'fr': "Voulez-vous arrêter le traitement et quitter ?", 'en': "Stop processing and quit?" },
+    'flux_copy': { 'fr': "Copie", 'en': "Copy" },
+    'chapters': { 'fr': "Chapitres", 'en': "Chapters" }
 }
 
 class LanguageManager:
     def __init__(self):
-        # Détection automatique de la langue système
-        # Si ça commence par 'fr', on met 'fr', sinon 'en'
         try:
             sys_lang = locale.getdefaultlocale()[0]
             if sys_lang and sys_lang.lower().startswith('fr'):
@@ -205,18 +77,11 @@ class LanguageManager:
             self.current_lang = 'en'
 
     def get(self, key, *args):
-        """Récupère le texte traduit. Si args est fourni, formate le texte."""
-        # On cherche la clé, si on trouve pas, on renvoie la clé elle-même (sécurité)
         entry = TRANSLATIONS.get(key, {})
         text = entry.get(self.current_lang, key)
-        
-        # Si on a des arguments (ex: pour remplir les {}), on formate
         if args:
-            try:
-                return text.format(*args)
-            except:
-                return text
+            try: return text.format(*args)
+            except: return text
         return text
 
-# Instance unique qu'on importera ailleurs
 LANG = LanguageManager()
