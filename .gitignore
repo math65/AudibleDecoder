@@ -1,0 +1,21 @@
+# On ignore l'environnement virtuel (TRES IMPORTANT)
+venv/
+env/
+
+# On ignore les fichiers de compilation et les exe
+src/build/
+src/dist/
+*.spec
+
+# On ignore les outils binaires (trop lourds pour GitHub)
+bin/
+bin/*.exe
+bin/*.rtc
+
+# On ignore les fichiers temporaires Python
+__pycache__/
+*.py[cod]
+*.log
+
+# On ignore la config VS Code
+.vscode/
